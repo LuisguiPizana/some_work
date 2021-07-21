@@ -1,0 +1,189 @@
+---
+title: "Clasificación Marketing Xhindó"
+author: "Santiago Muriel"
+date: "22/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(psych)
+library(factoextra)
+library(MASS)
+library(dplyr)
+library(scatterplot3d)
+library(cluster)
+library(mclust)
+```
+
+Carga de archivo
+```{r}
+ruta <- "../Datos/"
+archivo <- paste0(ruta,"Instagram Insights - Actividad Diaria.csv")
+
+actividad <- as.data.frame(read.csv(archivo))
+  
+names(actividad)[c(2:12)] <- c("M.Count","Comments","Likes","Impressions","M.Reach","Saves","N.Followers","P.Views","P.Impressions","P.Reach","Website")
+rownames(actividad) <- actividad$Date
+actividad$Date <- NULL
+```
+
+Limpiamos datos
+```{r}
+# Quitamos variables problemáticas
+X <- actividad[-c(1,4,9,12,13)] #eliminamos M.Count,Impressions(ambas), DayWeek y Objective
+# eliminamos el outlier
+X <- X[-86,]
+```
+
+
+Pruebas PCA
+```{r}
+# z <- princomp(X,cor = T)
+# summary(z, loadings=T)
+# plot(z)
+# 
+# R <- cor(X)
+# eig <- eigen(R)
+# (y <- round(eig$vectors,2))
+# 
+# # gráfica de los 1ros dos CP
+# fviz_pca_var(z)
+# 
+# # biplot con las observaciones
+# plot(z$scores[,1:2], pch = 16, cex = 0, main = "Representación de los scores en las primeras 2 PC")
+# text(z$scores, labels = 1:85, cex = 0.9) #Pon el número de alumno en el punto del i-ésimo score
+# abline(h=0);abline(v=0)
+```
+
+
+Pruebas Análisis Factorial
+```{r}
+# m1 <- factanal(X, factors = 2, scores = "Bartlett")# Cálculo con dos factores
+# 
+# fa.plot(m1, labels = names(X), xlim = c(-1,1), ylim = c(-1,1))
+# 
+# plot(m1$scores, pch = 16, cex = 0, main = "gráfica de los scores de los factores")
+# text(m1$scores, labels = 1:85, cex = 0.9)
+# abline(h=0,v=0)
+# 
+# # utilizando una rotación Varimax
+# m2 <- fa(r = X, nfactors = 2, scores = "Bartlett", rotate = "varimax")
+# fa.plot(m2, labels = names(X), xlim = c(-1,1), ylim = c(-1,1))
+# 
+# diagram(m2)
+# 
+# biplot(m2)
+# abline(h=0,v=0)
+```
+
+
+Correlación Canónica
+```{r}
+# entre grupos de variables
+# g1: variables del post y g2: var. del perfil
+media <- X[,1:4]; profile <- X[,5:8]
+u <- cancor(media, profile, xcenter = T, ycenter = T) #centramos los datos
+
+smedia <- as.matrix(media) %*% u$xcoef[,1]
+sprofile <- as.matrix(profile) %*% u$ycoef[,1]
+cor(sprofile,smedia)
+
+#gráfica de los scores:
+plot(sprofile,smedia,main = "Relación entre grupos de variables", ylab = "Publicaciones", xlab = "Perfíl de la cuenta")
+
+
+# vs la variable categórica Objective
+# 1ro transformamos la var. cat. a una matriz
+as.matind <- function(z) 
+{ #crea una matriz de indicadoras, z es categorica
+  z <- as.factor(z)
+  l <- levels(z)
+  print(l)
+  b <- as.numeric(z==rep(l,each=length(z)))
+  return(matrix(b,length(z)))
+}
+# reclasificamos a Emotional como Functional
+# checar si le cambia el orden a los factores
+#actividad$Objective <- recode_factor(actividad$Objective, Emotional = "Functional")
+# reclasificamos a Experentional como Functional
+#actividad$Objective <- recode_factor(actividad$Objective, Experiental = "Functional")
+
+y <- as.matind(actividad$Objective[-86]) 
+x <- as.matrix(X)
+
+u2 <- cancor(x, y, ycenter = F) #En este caso no tiene sentido centrar y
+# Tenemos un total de 8 variables canónicas
+mediciones <- x %*% u2$xcoef
+objetivos <- y %*% u2$ycoef
+
+colores = rainbow(9)
+par(mfrow=c(1,2))
+plot(objetivos[,1],mediciones[,1], col = colores[actividad$Objective[-86]], pch=16,
+xlab = "objetivos",
+ylab = "1a variable canonica")
+legend("bottomright", pch = 16, col = colores, legend = c("Educational","Emotional","Experiental","Functional","Resonance","Sales"  ), cex = .5)
+
+
+# Usamos las dos primeras direcciones en el conjunto de los ácidos, y marcamos con las regiones (y)
+plot(mediciones[,1:2], col = colores[actividad$Objective[-86]], pch=16,
+xlab = "1a variable canonica",
+ylab = "2a variable canonica")
+legend("topright", pch = 16, col = colores, legend = c("Educational","Emotional","Experiental","Functional","Resonance","Sales"  ), cex = 0.5)
+
+# gráfica en 3d de las variables canónicas
+#scatterplot3d(mediciones[,1:3], color = colores[actividad$Objective[-86]], pch = 16)
+```
+
+
+Método de Clasificación
+```{r}
+# DataClasif <- X
+# # reclasificamos a Resonance como Functional
+# DataClasif[DataClasif$Objective == "Resonance","Objective"] <- "Functional"
+# 
+# categorias <- unique(DataClasif$Objective)
+# 
+# lda1 <- lda(Objective ~ . , data = DataClasif, prior=rep(1/5,5))
+# 
+# mu_k <- lda1$means
+# mu <- colMeans(mu_k) #media global
+# scores <- scale(DataClasif[-12], center = mu, scale=F) %*% lda1$scaling
+# 
+# plot(scores, xlab="LD1", ylab="LD2", col=as.numeric(DataClasif$Objective),
+# pch = as.numeric(DataClasif[-c(1,2)]$Objective), main= "Categorías Posts")
+# legend("topleft", legend = categorias, pch = 1:5, col = 1:5, cex = .8)
+```
+
+
+Método de Conglomerados
+```{r}
+# exploramos el número de clusters con gráficas de codo más robustas
+par(mfrow=c(1,2))
+fviz_nbclust(X, kmeans, method = "silhouette") # método de Silueta
+fviz_nbclust(X, kmeans, method = "wss") #whithin sum of squares
+
+# agrupamiento de CB
+distancia <- get_dist(X, method = "euclidean")
+m1 <- hclust(d = distancia, method = "single")
+plot(m1, cex = 0.8, main = "Dendrograma para las publicaciones")
+modelo <- list(X = X, m1 = m1, dist = distancia)
+
+# K-medias
+kmedias2 <- kmeans(scale(X),2)
+kmedias2$size
+# Calcula componentes principales para graficar los clusters en dos dimensiones.
+fviz_cluster(kmedias2,data = scale(X), ellipse.type = "euclid", repel = T, star.plot = T)
+plot(X$Likes,X$P.Views,col=kmedias2$cluster, main = "Likes vs Profile Views con 2 clusters", ylab = "Profile Views", xlab = "Likes")
+
+# método estadístico
+# El supuesto principal es que los vectores x1, … , x𝑛 se
+# obtienen de una mezcla de distribuciones
+BIC <- mclustBIC(X)
+mod1 <- Mclust(X,x=BIC)
+plot(mod1,what="classification")
+
+#Calcula la tabla de clasificación: (vs el objetivo impuesto)
+table(actividad$Objective[-86] ,mod1$classification)
+```
+

@@ -1,0 +1,102 @@
+---
+title: "EDA MKT Xhindó"
+author: "Santiago Muriel"
+date: "11/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+suppressMessages(library(corrplot))
+suppressMessages(library(GGally))
+suppressMessages(library(gridExtra))
+#library('GGally', 'tidyverse', 'mctest', 'ggplot2', 'ggbeeswarm','dplyr', 'plotly', 'tidyr', 'gridExtra') algunas recomendadas
+```
+
+
+Carga de archivos
+```{r}
+ruta <- "../Datos/"
+archivo1 <- paste0(ruta,"Instagram Insights - Actividad Diaria.csv")
+archivo2 <- paste0(ruta,"Instagram Insights - Demografía.csv")
+archivo3 <- paste0(ruta,"Instagram Insights - Geografía.csv")
+archivo4 <- paste0(ruta,"Instagram Insights - Post Details.csv")
+
+actividad <- as.data.frame(read.csv(archivo1))
+posts <- as.data.frame(read.csv(archivo4))
+
+names(actividad)[c(2:12)] <- c("M.Count","Comments","Likes","Impressions","M.Reach","Saves","N.Followers","P.Views","P.Impressions","P.Reach","Website") 
+
+```
+
+Análisis Exploratorio
+
+Análisis Univariado
+```{r}
+# summary
+summary(actividad[-1])
+
+# distribuciones
+par(mfrow=c(3,2))
+plot(density(actividad$Likes), main = "Likes")
+plot(density(actividad$Impressions), main = "Impressions")
+plot(density(actividad$M.Reach), main = "Media Reach")
+plot(density(actividad$N.Followers), main = "New Followers")
+plot(density(actividad$P.Views), main = "Profile Views")
+plot(density(actividad$Website), main = "Website Clicks")
+```
+
+Análisis de Correlación
+```{r}
+# correlaciones
+corrplot(cor(actividad[-c(1,14)]), method = "ellipse")
+# dada la alta correlación entre "Reach" e "Impressions", nos quedamos sólo con "Reach"
+corrplot(cor(actividad[-c(1,2,5,10,13,14)]), method = "ellipse")
+```
+
+Scatter Plots
+```{r}
+# scatter plots general
+pairs(actividad[-c(1,2,3,5,10)], col = actividad[,1], cex = 1.2) #quitamos counts y comments
+# zoom in
+pairs(actividad[-c(1,2,3,5,7,9,10)], col = actividad[,1], cex = 1.2)
+
+par(mfrow=c(1,2))
+# likes por día de la semana
+boxplot(actividad$Likes ~ actividad$DayWeek, main = "Likes x día", xlab = "Día (1=Lunes)", ylab = "Likes")
+# alcance por día de la semana
+boxplot(actividad$M.Reach ~ actividad$DayWeek, main = "Media Reach x día", xlab = "Día (1=Lunes)", ylab = "Media Reach")
+
+# ahora por objetivo
+boxplot(actividad$Likes ~ actividad$Objective, main = "Likes x Objetivo", xlab = "Objetivos", ylab = "Likes")
+#
+boxplot(actividad$Website ~ actividad$Objective, main = "Cliks a página x Objetivo", xlab = "Objetivos", ylab = "Clicks")
+#
+boxplot(actividad$N.Followers ~ actividad$Objective, main = "New Followers x Objetivo", xlab = "Objetivos", ylab = "New Followers")
+```
+
+Tablas de contigencias (variables categóricas)
+```{r}
+# ocurrencias del número de post´s
+table(actividad$M.Count)
+
+# acumulados por día
+for (i in 1:7) 
+{
+  cat("Día ",i,"-> Posts:",sum(subset(actividad, DayWeek == i)$M.Count),
+      ", Likes:",sum(subset(actividad, DayWeek == i)$Likes),
+      ", Comments:",sum(subset(actividad, DayWeek == i)$Comments),"\n")
+}
+
+# análisis por Objective
+objetivos <- unique(actividad$Objective)
+for (i in objetivos) 
+{
+  
+  cat("Objetivo:",i,"-> Posts:",sum(subset(actividad, Objective == i)$M.Count),
+      ", Likes:",sum(subset(actividad, Objective == i)$Likes),
+      ", Comments:",sum(subset(actividad, Objective == i)$Comments),"\n")
+}
+
+```
+

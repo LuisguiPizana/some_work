@@ -1,0 +1,263 @@
+---
+title: "Xhindó_Posts_análisis_factorial"
+author: "Luis Guillermo Pizaña"
+date: "11/23/2020"
+output: html_document
+---
+
+Bibliotecas a utilizar
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(psych)
+library(factoextra)
+```
+
+Introducción
+
+Propósito del análisis factorial
+
+Como pensamos hacerlo. Para que queremos los datos y como se relaciona con la interpretación
+
+
+
+Lectura de datos
+
+*La selección de datos se hace con respecto a las desiciónes tomadas en el análisis exploratorio
+
+Se leen los datos y se seleccionan las variables a utilizar
+
+
+```{r}
+act_diaria <- data.frame(read.csv("Instagram Insights - Actividad Diaria copy.csv"))
+act_diaria <- act_diaria[,-c(2,3,5,10,13)]
+
+print(head(act_diaria))
+
+```
+
+
+Para realizar un análisis factorial, conocemos dos formas para estimar la matriz L. Usaremos la función princomp para realizar una descomposición en valores singulares y la función factanal para estimar la matriz por medio de máxima verosimilitud. Para determinar el metodo que usaremos utilizaremos criterios de variabilidad. En particular nos interesa saber la variabilidad explicada con dos y tres componentes por fines de interpretación. 
+
+```{r cars}
+aux <- act_diaria[,-1]
+
+mod <- princomp(aux, cor = T) # definimos al modelo sin las fechas de publicación
+
+mod2 <- factanal(aux,factors= 2)
+
+mod3 <- factanal(aux, factors = 3)
+
+summary(mod, loadings = T)
+
+print(mod2$loadings)
+
+print(mod3$loadings)
+
+```
+
+Con los resultados anteriores podemos observar que la proporción de varianza explicada con los primeros dos eigenvectores es aproximadamente la misma que la variabilidad explicada con los primeros tres factores de la función factanal. Dado que nos interesa resumir la información de manera eficiente y sobre todo simplificar la interpretación, utilizarmos los eigenvectores para estimar la matriz L. 
+Podemos observar las raices de los eigenvalores como la desviación estandar de los componentes. 
+
+Si buscamos que el eigenvalor correspondiente al vector sea mayor a 1 entonces nos quedamos unicamente con los primeros dos componentes
+
+
+Se presentarán algunas gráficas para identificar el comportamiento de las variables originales con respecto a los eigenvectores. 
+
+```{r pressure, echo=FALSE}
+fviz_pca_var(mod)
+
+```
+
+
+
+
+Calcularemos a las matrices L y veremos la variabilidad de las variables originales explicada por 2 y 3 dimensiones.
+
+```{r}
+l <- function(n)
+{
+  #recibe el número de eigenvectores en la aproximación de L
+  L <- mod$loadings[,1:n]%*%diag(mod$sdev[1:n]) #Ver eficiencia de producto matricial
+  #print(L)
+  #print(L%*%t(L))
+}
+
+
+var_varOrig_explicada <- function(n)
+{
+  L <- l(n)
+  cad1 <- "Variabilidad explicada de la variable"
+  cad2 <- "original por los primeros"
+  cad3 <- "componentes"
+  suma <- 0
+  for(i in 1:length(mod$sdev))
+    {
+    suma <- sum(L[i,]^2)
+    print(paste(cad1,i,cad2,n,cad3,":",suma,sep=" "))
+    suma <- 0
+    }
+}
+
+print(var_varOrig_explicada(2))
+
+print(var_varOrig_explicada(3))
+
+
+```
+
+Un comentario importante es notar que la variable número 6 es explicada en un 23% con una aproximación de dos eigenvectores mientras que es explicada al 96% con tres eigenvectores. La variable la cual define casi completamente el tercer componente es Profile.reach. Dado este hallasgo, buscaremos incluir en el análisis al tercer componente. 
+
+
+
+
+for(i in 1:n)
+{
+  cs_err <- sum(eigen[(i:n)]^2)
+  cad <- paste(cad1,i, cad2,sep=" ")
+  print(cad)
+  print(cs_err)
+  cad <- ""
+  cs_err <- 0
+}
+
+
+Calculamos los factores utilizando los componentes principales. Para esto primero definimos a la matriz residual, la media de las distintas variables y finalmente calculamos los factores. 
+
+```{r}
+
+#FALTA REVISAR PARA 1 FACTOR
+
+
+n <- 7
+
+mat_residual <- function(num_vecs)
+{
+  L <- l(num_vecs)
+  res <- diag(n)- diag(diag(L%*%t(L)))
+}
+
+
+
+mu <- function(mat)
+{
+mu <- c(1:n)
+
+for(i in 1:n)
+{
+  mu[i] <- mean(aux[,i])
+}
+mu
+}
+
+
+#hasta aqui funciona relativamente bien
+
+
+#Calculamos factores de una sola observación
+# fj <- (L'psi^-1L)^-1L'psi^-1(xj-xbar)
+
+factores <- function(num_vecs,varimax)
+{
+  mu1 <- mu(aux)
+  facts <- c()
+  L <- l(num_vecs)
+  if(varimax == 1)
+    L <- varimax(L,normalize = F)$loadings
+  if(num_vecs == 1)               #Aqui hay un error
+    for(i in 1:aux[,1])
+      facts <- c(facts,(t(aux[i,])-mu1)[1]/L[i])
+  else
+  {
+  inv_res <- inv(mat_residual(num_vecs))
+  aux2 <- inv(t(L)%*%inv_res%*%L)%*%t(L)%*%inv_res
+  for(i in 1:length(aux[,1]))
+  {
+      f <- aux2%*%(t(aux[i,])-mu1)
+      facts <- c(facts,f)
+  }
+  facts <- matrix(facts, nrow = length(facts)/num_vecs)
+  }
+  facts
+}
+
+#revisar un factor
+factores1 <- factores(1,0)  #Se necesita cambiar el metodo para un componente ya que la matriz es singular
+
+factores2 <- factores(2,0)
+
+factores3 <- factores(3,0)
+
+
+
+```
+
+
+Visualisamos los scores 
+```{r}
+plot(factores2, pch = 16, cex = 0, main = "Representación de los scores estimación 2 factores ", xlab= "Factor 1", ylab = "Factor 2")
+text(factores2, labels = 1:85, cex = 0.9) #Pon el número de dia en el punto del i-ésimo score
+abline(h=0);abline(v=0)
+
+plot(factores3[,1:2], pch = 16, cex = 0, main = "Representación de los scores estimación 3 factores ", xlab= "Factor 1", ylab = "Factor 2")
+text(factores3[,1:2], labels = 1:85, cex = 0.9) 
+abline(h=0);abline(v=0)
+
+plot(factores3[,c(1,3)], pch = 16, cex = 0, main = "Representación de los scores estimación 3 factores",xlab= "Factor 1", ylab = "Factor 3")
+text(factores3[,c(1,3)], labels = 1:85, cex = 0.9) 
+abline(h=0);abline(v=0)
+
+plot(factores3[,2:3], pch = 16, cex = 0, main = "Representación de los scores estimación 3 factores",xlab= "Factor 2", ylab = "Factor 3")
+text(factores3[,2:3], labels = 1:85, cex = 0.9) #
+abline(h=0);abline(v=0)
+
+ scatter3D(factores3[,1],factores3[,2],factores3[,3], phi = 0, bty = "g", pch = 20, cex = 2, ticktype = "detailed", xlab = "Factor 1", ylab = "Factor 2", zlab = "Factor 3")
+
+ 
+plot(factores1, pch = 16, cex = 0, main = "Representación de los scores estimación 3 factores",xlab= "Factor 2", ylab = "Factor 3")
+text(factores3[,2:3], labels = 1:85, cex = 0.9) #
+abline(h=0);abline(v=0)
+ 
+
+```
+
+
+
+
+En esta sección utilizaremos la rotación varimax sobre la matriz de cargas L para dos y tres 
+
+```{r}
+
+rot_mat2 <- varimax(l(2))$rotmat
+
+rot_mat3 <- varimax(l(2))$rotmat
+
+factores2R <- factores(2,1)
+
+factores3R <- factores(3,1)
+
+#Graficas de los factores rotados
+
+plot(factores3R[,1:2], pch = 16, cex = 0, main = "Representación de los scores estimación 3 factores rotados",xlab= "Factor 1", ylab = "Factor 2")
+text(factores3[,2:3], labels = 1:85, cex = 0.9) #
+abline(h=0);abline(v=0)
+
+plot(factores2R, pch = 16, cex = 0, main = "Representación de los scores estimación 2 factores rotados",xlab= "Factor 1", ylab = "Factor 2")
+text(factores3[,2:3], labels = 1:85, cex = 0.9) #
+abline(h=0);abline(v=0)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
